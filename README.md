@@ -49,3 +49,11 @@ golang websocket
 	      })
         
   l.Run()
+  
+  http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(fmt.Sprintf("当前在线: [%d]", l.Total())))
+  })
+  http.HandleFunc("/ws", l.OnHandShake)
+  l.Logger().Infof("%s server start %s", strings.Repeat("-", 30), strings.Repeat("-", 30))
+  l.Logger().Infof("listen on: [%s]", ":18765")
+  http.ListenAndServe(":18765", nil)
