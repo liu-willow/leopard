@@ -250,15 +250,15 @@ func (l *Engine) Total() int {
 }
 
 // OnHandShake 握手
-func (l *Engine) OnHandShake(w http.ResponseWriter, r *http.Request) error {
+func (l *Engine) OnHandShake(w http.ResponseWriter, r *http.Request) {
 	if l.ctx.closed() {
-		return ErrorHubClosed
+		l.Logger().Error(ErrorHubClosed)
 	}
 
 	conn, err := l.upgrader.Upgrade(w, r, dHeaders)
 
 	if err != nil {
-		return err
+		l.Logger().Error(err)
 	}
 	client := &Client{
 		uuid:       uuid.NewString(),
@@ -286,8 +286,6 @@ func (l *Engine) OnHandShake(w http.ResponseWriter, r *http.Request) error {
 	client.Close()
 
 	l.handles.Disconnect(client)
-
-	return nil
 }
 
 /******************************************** 公用方法 可以直接调用, 也可以配置到WithXXX的参数里注入 end **************************************************************/
