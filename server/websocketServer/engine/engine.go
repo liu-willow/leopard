@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/kataras/golog"
@@ -9,7 +8,6 @@ import (
 	"github.com/liu-willow/leopard/server/websocketServer/iFace"
 	"net/http"
 	"reflect"
-	"strings"
 	"sync"
 	"time"
 )
@@ -31,11 +29,10 @@ type (
 	}
 
 	Engine struct {
-		addr     string
 		Config   *iFace.Config
 		upgrader *websocket.Upgrader
 		handles  *HandleFunc
-		hub      *hub
+		ctx      *Context
 		logger   *golog.Logger
 		route    iFace.IRoute
 		clients  iFace.IClients
@@ -45,13 +42,13 @@ type (
 		Config   *iFace.Config
 		Upgrader *websocket.Upgrader
 		HandleFunc
-		Hub *hub
+		Hub *Context
 	}
 )
 
 var (
 	dHeaders = map[string][]string{"server": {"leopard"}}
-	dHub     = newHub(dClients)
+	dCtx     = newHub(dClients)
 	dConfig  = &iFace.Config{
 		WriteWait:         10 * time.Second,
 		PongWait:          60 * time.Second,
@@ -62,7 +59,6 @@ var (
 		WriteBufferSize:   1024,
 	}
 	leopard = &Engine{
-		addr:     ":18765",
 		Config:   dConfig,
 		upgrader: dUpgrader,
 		handles: &HandleFunc{
@@ -75,7 +71,7 @@ var (
 			Ping:       func(client iFace.IClient) {},
 		},
 		logger:  golog.New(),
-		hub:     dHub,
+		ctx:     dCtx,
 		route:   dRoute,
 		clients: dClients,
 	}
@@ -86,16 +82,16 @@ var (
 	}
 )
 
-func GetServer() *Engine {
-	return leopard
-}
-
 func New() *Engine {
 	return leopard
 }
 
-func (l *Engine) WithAddr(addr string) {
-	l.addr = addr
+func GetServer() *Engine {
+	return leopard
+}
+
+func GetContext() *Context {
+	return leopard.ctx
 }
 
 func (l *Engine) WithConfig(config *iFace.Config) {
@@ -130,9 +126,9 @@ func (l *Engine) WithHandler(handle HandleFunc) {
 	}
 }
 
-func (l *Engine) WithHub(hub *hub) {
-	if l.IsHubClose() && hub != nil {
-		l.hub = hub
+func (l *Engine) WithHub(ctx *Context) {
+	if l.IsHubClose() && ctx != nil {
+		l.ctx = ctx
 	}
 }
 
@@ -218,11 +214,11 @@ func (l *Engine) OnDisconnect(fn func(iFace.IClient)) {
 
 // Broadcast messageType: websocket.TextMessage/websocket.BinaryMessage
 func (l *Engine) Broadcast(message iFace.Envelope) error {
-	if l.hub.closed() {
+	if l.ctx.closed() {
 		return ErrorHubClosed
 	}
 
-	l.hub.broadcast <- &message
+	l.ctx.broadcast <- &message
 
 	return nil
 }
@@ -242,7 +238,7 @@ func (l *Engine) CallSpace(pattern string, msg interface{}) (interface{}, error)
 }
 
 func (l *Engine) IsHubClose() bool {
-	return l.hub.closed()
+	return l.ctx.closed()
 }
 
 func (l *Engine) Logger() *golog.Logger {
@@ -250,12 +246,12 @@ func (l *Engine) Logger() *golog.Logger {
 }
 
 func (l *Engine) Total() int {
-	return l.hub.clients.Count()
+	return l.ctx.clients.Count()
 }
 
 // OnHandShake 握手
-func (l *Engine) onHandShake(w http.ResponseWriter, r *http.Request) error {
-	if l.hub.closed() {
+func (l *Engine) OnHandShake(w http.ResponseWriter, r *http.Request) error {
+	if l.ctx.closed() {
 		return ErrorHubClosed
 	}
 
@@ -275,7 +271,7 @@ func (l *Engine) onHandShake(w http.ResponseWriter, r *http.Request) error {
 		mutex:      &sync.RWMutex{},
 	}
 
-	l.hub.register <- client
+	l.ctx.register <- client
 
 	l.handles.Connect(client)
 
@@ -283,8 +279,8 @@ func (l *Engine) onHandShake(w http.ResponseWriter, r *http.Request) error {
 
 	client.RLoop()
 
-	if !l.hub.closed() {
-		l.hub.unregister <- client
+	if !l.ctx.closed() {
+		l.ctx.unregister <- client
 	}
 
 	client.Close()
@@ -297,12 +293,5 @@ func (l *Engine) onHandShake(w http.ResponseWriter, r *http.Request) error {
 /******************************************** 公用方法 可以直接调用, 也可以配置到WithXXX的参数里注入 end **************************************************************/
 
 func (l *Engine) Run() {
-	go l.hub.Run()
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(fmt.Sprintf("当前在线: [%d]", l.Total())))
-	})
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) { l.onHandShake(w, r) })
-	l.Logger().Infof("%s server start %s", strings.Repeat("-", 30), strings.Repeat("-", 30))
-	l.Logger().Infof("listen on: [%s]", l.addr)
-	http.ListenAndServe(l.addr, nil)
+	go l.ctx.Run()
 }

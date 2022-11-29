@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-type hub struct {
+type Context struct {
 	clients    iFace.IClients
 	broadcast  chan *iFace.Envelope
 	register   chan iFace.IClient
@@ -15,10 +15,10 @@ type hub struct {
 	mutex      *sync.RWMutex
 }
 
-var _ iFace.IHub = (*hub)(nil)
+var _ iFace.IHub = (*Context)(nil)
 
-func newHub(clients iFace.IClients) *hub {
-	return &hub{
+func newHub(clients iFace.IClients) *Context {
+	return &Context{
 		clients:    clients,
 		broadcast:  make(chan *iFace.Envelope),
 		register:   make(chan iFace.IClient),
@@ -29,7 +29,7 @@ func newHub(clients iFace.IClients) *hub {
 	}
 }
 
-func (h *hub) Run() {
+func (h *Context) Run() {
 loop:
 	for {
 		select {
@@ -46,17 +46,17 @@ loop:
 			for _, client := range h.clients.All() {
 				if m.Filter != nil {
 					if m.Filter(client) {
-						client.Write(m.MessageType, m.Message)
+						client.Text(m.MessageType, m.Message)
 					}
 				} else {
-					client.Write(m.MessageType, m.Message)
+					client.Text(m.MessageType, m.Message)
 				}
 			}
 			h.mutex.RUnlock()
 		case m := <-h.exit:
 			h.mutex.Lock()
 			for ID, client := range h.clients.All() {
-				client.Write(m.MessageType, m.Message)
+				client.Text(m.MessageType, m.Message)
 				h.clients.Delete(ID)
 				client.Close()
 			}
@@ -67,19 +67,19 @@ loop:
 	}
 }
 
-func (h *hub) closed() bool {
+func (h *Context) closed() bool {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 	return !h.open
 }
 
-func (h *hub) Count() int {
+func (h *Context) Count() int {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 
 	return len(h.clients.All())
 }
 
-func (h *hub) All() map[string]iFace.IClient {
+func (h *Context) All() map[string]iFace.IClient {
 	return h.clients.All()
 }

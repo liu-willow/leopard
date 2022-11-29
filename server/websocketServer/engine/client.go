@@ -69,7 +69,7 @@ loop:
 	for {
 		select {
 		case message := <-c.output:
-			err := c.WriteRaw(message.MessageType, message.Message)
+			err := c.Binary(message.MessageType, message.Message)
 
 			if err != nil {
 				c.leopard.handles.Error(c, err)
@@ -88,7 +88,7 @@ loop:
 				c.leopard.handles.MessageEnd(c, message.Message)
 			}
 		case <-ticker.C:
-			c.WriteRaw(websocket.PingMessage, []byte{})
+			c.Binary(websocket.PingMessage, []byte{})
 		case _, ok := <-c.outputDone:
 			if !ok {
 				break loop
@@ -137,7 +137,7 @@ func (c *Client) Close() {
 	}
 
 }
-func (c *Client) writeMessage(message *iFace.Envelope) {
+func (c *Client) write(message *iFace.Envelope) {
 	if c.closed() {
 		c.leopard.handles.Error(c, ErrorClientClosed)
 		return
@@ -150,7 +150,7 @@ func (c *Client) writeMessage(message *iFace.Envelope) {
 	}
 }
 
-func (c *Client) WriteRaw(messageType int, message []byte) error {
+func (c *Client) Binary(messageType int, message []byte) error {
 	if c.closed() {
 		return ErrorClientClosed
 	}
@@ -165,12 +165,12 @@ func (c *Client) WriteRaw(messageType int, message []byte) error {
 	return nil
 }
 
-func (c *Client) Write(messageType int, message []byte) error {
+func (c *Client) Text(messageType int, message []byte) error {
 	if c.closed() {
 		return websocket.ErrCloseSent
 	}
 
-	c.writeMessage(&iFace.Envelope{MessageType: messageType, Message: message})
+	c.write(&iFace.Envelope{MessageType: messageType, Message: message})
 
 	return nil
 }
