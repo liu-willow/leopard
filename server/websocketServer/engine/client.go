@@ -43,6 +43,7 @@ func (c *Client) Set(key string, value interface{}) {
 
 	c.context[key] = value
 }
+
 func (c *Client) Get(key string) (value interface{}, exists bool) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
