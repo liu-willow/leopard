@@ -138,6 +138,7 @@ func (c *Client) Close() {
 	}
 
 }
+
 func (c *Client) write(message *iFace.Envelope) {
 	if c.closed() {
 		c.leopard.handles.Error(c, ErrorClientClosed)
